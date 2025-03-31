@@ -17,6 +17,7 @@ page.get("/", async (ctx) => {
   ctx.body = html;
 });
 
+const cmdParams = process.argv.slice(2);
 
 page.post("/upload", upload.single('file'), async (ctx) => {
   try {
@@ -40,8 +41,15 @@ page.post("/upload", upload.single('file'), async (ctx) => {
       str += `${template} \n`;
     })
 
-    const filePath = path.resolve(__dirname, "api.js");
-    await fs.writeFile(filePath, str);
+    let outPath = path.resolve(__dirname, "api.js");
+    const index = cmdParams.indexOf("--o");
+    if (index > -1) {
+      const _path = cmdParams[index + 1];
+      if (!_path.startsWith("--")) {
+        outPath = path.resolve(_path, "api.js");
+      }
+    }
+    await fs.writeFile(outPath, str);
     ctx.body = str;
 
   } catch (e) {
