@@ -1,6 +1,8 @@
 const Koa = require("koa");
 const app = new Koa();
 
+const open = require("open");
+
 const { bodyParser } = require("@koa/bodyparser");
 app.use(bodyParser());
 
@@ -12,4 +14,6 @@ app.use(page.routes());
 const port = 3001;
 app.listen(port, () => {
   console.log("启动成功");
+  const url = `http://localhost:${port}`;
+  open(url);
 })
