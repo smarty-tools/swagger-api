@@ -23,16 +23,13 @@ page.post("/upload", upload.single('file'), async (ctx) => {
   try {
     const json = JSON.parse(ctx.file.buffer.toString());
 
-
     let str = "";
     const baseUrl = json.servers[0].url;
-    str += getTemplateHeader({ baseUrl })
+    str += getTemplateHeader({ baseUrl });
 
     const paths = Object.keys(json.paths);
-    console.log(paths.length)
-    
 
-    paths.forEach((path, index) => {
+    paths.forEach((path) => {
       const info = json.paths[path];
       const method = info["get"] ? "get" : "post";
 
@@ -53,7 +50,7 @@ page.post("/upload", upload.single('file'), async (ctx) => {
     ctx.body = str;
 
   } catch (e) {
-    console.error(e)
+    console.error(e);
   }
 });
 
