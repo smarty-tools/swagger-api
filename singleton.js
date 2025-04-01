@@ -3,7 +3,7 @@ const path = require('path');
 const open = require('open');
 
 class KoaSingleton {
-  constructor(port = 3000) {
+  constructor(port) {
     this.port = port;
     this.lockFile = path.join(__dirname, '.koa.lock');
   }

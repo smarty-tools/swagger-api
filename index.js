@@ -12,7 +12,7 @@ app.use(page.routes());
 const Singleton = require("./singleton");
 
 const parsed = getArgs(process.argv.slice(2));
-const port = parsed.p ?? parsed.prot;
+const port = parsed.p ?? parsed.prot ?? 3000;
 
 const singleton = new Singleton(port);
 
