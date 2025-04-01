@@ -3,7 +3,13 @@
   <body>
     <form method="post" action="/upload" enctype="multipart/form-data">
       <input type="file" accept=".json" name="file" />
-      <button type="submit">上传</button>
+      <div>
+        <input type="checkbox" id="prefix" name="prefix" checked />
+        <label for="prefix">是否拼接baseUrl</label>
+      </div>
+      <div>
+        <button type="submit">上传</button>
+      </div>
     </form>
   </body>
 </html>

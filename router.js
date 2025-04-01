@@ -22,6 +22,10 @@ const parsed = getArgs(process.argv.slice(2));
 
 page.post("/upload", upload.single('file'), async (ctx) => {
   try {
+    const body = ctx.request.body;
+    const options = {};
+    options.prefix = !!body.prefix;
+
     const json = JSON.parse(ctx.file.buffer.toString());
 
     let str = "";
@@ -34,10 +38,10 @@ page.post("/upload", upload.single('file'), async (ctx) => {
       const info = json.paths[path];
       const method = info["get"] ? "get" : "post";
 
-      const template = getApi({ path, method, ...info[method] });
+      const template = getApi({ path, method, ...info[method] }, options);
 
       str += `${template} \n`;
-    })
+    });
 
     let outPath = path.resolve(__dirname, "api.js");
     const _path = parsed.o;
@@ -47,7 +51,6 @@ page.post("/upload", upload.single('file'), async (ctx) => {
 
     await fs.writeFile(outPath, str);
     ctx.body = str;
-
   } catch (e) {
     console.error(e);
   }
