@@ -9,6 +9,7 @@ const page = new Router();
 
 
 const { getTemplateHeader, getApi } = require("./utils");
+const getArgs = require("./utils/utils");
 
 page.get("/", async (ctx) => {
   const filePath = path.resolve(__dirname, "index.html");
@@ -43,7 +44,7 @@ page.post("/upload", upload.single('file'), async (ctx) => {
     if (_path && typeof _path !== "boolean") {
       outPath = path.resolve(_path, "api.js");
     }
-    
+
     await fs.writeFile(outPath, str);
     ctx.body = str;
 
