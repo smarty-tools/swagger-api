@@ -41,6 +41,8 @@ class KoaSingleton {
     if (fs.existsSync(this.lockFile)) {
       fs.unlinkSync(this.lockFile);
     }
+
+    process.kill(process.pid);
   }
 }
 
