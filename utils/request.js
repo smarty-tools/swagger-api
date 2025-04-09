@@ -2,6 +2,8 @@ const fs = require("fs/promises");
 const path = require("path");
 const getArgs = require("./utils");
 
+const querystring = require("querystring");
+
 const parsed = getArgs(process.argv.slice(2));
 
 function getTemplateHeader(info) {
@@ -21,10 +23,59 @@ function getPayload(method) {
   }
 }
 
+function parseParams(params) {
+  let url = params.path;
+  let payload;
+  let _params;
+  const method = params.method;
+
+  const arr = ["get", "delete", "head", "options"];
+  if (arr.includes(method)) {
+    payload =  "{ params }";
+
+    _params = params.parameters;
+  } else {
+    // post、put、patch、postForm、putForm、patchForm
+    payload =  "params";
+
+    if (params.requestBody) {
+      _params = params.requestBody.content;
+    }
+
+    if (params.parameters?.length) {
+      const query = {};
+      params.parameters.forEach(item => {
+        const key = item.name;
+        query[key] = `\${params.${key}}`;
+      })
+      let querystr = querystring.stringify(query, "&", "=", { encodeURIComponent: (data) => data });
+      url += `?${querystr}`
+    }
+  }
+
+  return {
+    url,
+    payload,
+    _params
+  }
+}
+
 
 function getApi(params, options) {
-  const payload = getPayload(params.method);
-  const url = options.prefix ? `\`\${baseUrl}${params.path}\`` : `"${params.path}"`;
+  // const payload = getPayload(params.method);
+  // let url = options.prefix ? `\`\${baseUrl}${params.path}\`` : `"${params.path}"`;
+
+  // if (params.path === "/file/upload/resourcePositionImage") {
+  //   console.log(params)
+  //   // console.log(params.requestBody)
+  // }
+
+  let { url, payload, _params } = parseParams(params);
+  url = options.prefix ? `\`\${baseUrl}${url}\`` : `"${url}"`;
+
+  if (params.path === "/file/upload/resourcePositionImage") {
+    console.log(_params)
+  }
 
   return `
 /**
