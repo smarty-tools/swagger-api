@@ -42,6 +42,7 @@ function parseParams(params, schemas) {
       _params = params.requestBody.content;
     }
 
+    // 针对post请求存在需要拼接query的情况
     if (params.parameters?.length) {
       const query = {};
       params.parameters.forEach(item => {
@@ -79,12 +80,9 @@ function getApi(params, options, schemas) {
   //   // console.log(params.requestBody)
   // }
 
-  let { url, payload, _params } = parseParams(params, schemas);
+  let { url, payload } = parseParams(params, schemas);
   url = options.prefix ? `\`\${baseUrl}${url}\`` : `"${url}"`;
 
-  if (params.path === "/file/upload/resourcePositionImage") {
-    console.log(_params)
-  }
 
   return `
 /**
