@@ -23,7 +23,7 @@ function getPayload(method) {
   }
 }
 
-function parseParams(params) {
+function parseParams(params, schemas) {
   let url = params.path;
   let payload;
   let _params;
@@ -31,12 +31,12 @@ function parseParams(params) {
 
   const arr = ["get", "delete", "head", "options"];
   if (arr.includes(method)) {
-    payload =  "{ params }";
+    payload = "{ params }";
 
     _params = params.parameters;
   } else {
     // post、put、patch、postForm、putForm、patchForm
-    payload =  "params";
+    payload = "params";
 
     if (params.requestBody) {
       _params = params.requestBody.content;
@@ -46,7 +46,16 @@ function parseParams(params) {
       const query = {};
       params.parameters.forEach(item => {
         const key = item.name;
-        query[key] = `\${params.${key}}`;
+        const schema = item.schema;
+        if (schema.type) {
+          query[key] = `\${params.${key}}`;
+        } else if (schema.$ref) {
+          const ref = schema.$ref.split("/").at(-1);
+          const { properties } = schemas[ref];
+          Object.keys(properties).forEach((key) => {
+            query[key] = `\${params.${key}}`;
+          })
+        }
       })
       let querystr = querystring.stringify(query, "&", "=", { encodeURIComponent: (data) => data });
       url += `?${querystr}`
@@ -61,7 +70,7 @@ function parseParams(params) {
 }
 
 
-function getApi(params, options) {
+function getApi(params, options, schemas) {
   // const payload = getPayload(params.method);
   // let url = options.prefix ? `\`\${baseUrl}${params.path}\`` : `"${params.path}"`;
 
@@ -70,7 +79,7 @@ function getApi(params, options) {
   //   // console.log(params.requestBody)
   // }
 
-  let { url, payload, _params } = parseParams(params);
+  let { url, payload, _params } = parseParams(params, schemas);
   url = options.prefix ? `\`\${baseUrl}${url}\`` : `"${url}"`;
 
   if (params.path === "/file/upload/resourcePositionImage") {
@@ -98,11 +107,13 @@ async function getRequestFile(json, options) {
 
   const paths = Object.keys(json.paths);
 
+  const schemas = json.components.schemas;
+
   paths.forEach((path) => {
     const info = json.paths[path];
     const method = Object.keys(info)[0];
 
-    const template = getApi({ path, method, ...info[method] }, options);
+    const template = getApi({ path, method, ...info[method] }, options, schemas);
 
     str += `${template} \n`;
   });
