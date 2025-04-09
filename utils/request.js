@@ -11,8 +11,19 @@ const baseUrl = "${info.baseUrl}";
 };
 
 
+function getPayload(method) {
+  const arr = ["get", "delete", "head", "options"];
+  if (arr.includes(method)) {
+    return "{ params }";
+  } else {
+    // post、put、patch、postForm、putForm、patchForm
+    return "params";
+  }
+}
+
+
 function getApi(params, options) {
-  const payload = params.method === "get" ? "{ params }" : "params";
+  const payload = getPayload(params.method);
   const url = options.prefix ? `\`\${baseUrl}${params.path}\`` : `"${params.path}"`;
 
   return `
@@ -38,7 +49,7 @@ async function getRequestFile(json, options) {
 
   paths.forEach((path) => {
     const info = json.paths[path];
-    const method = info["get"] ? "get" : "post";
+    const method = Object.keys(info)[0];
 
     const template = getApi({ path, method, ...info[method] }, options);
 
