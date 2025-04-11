@@ -6,6 +6,8 @@ const querystring = require("querystring");
 
 const parsed = getArgs(process.argv.slice(2));
 
+const { getType } = require("./type");
+
 function getTemplateHeader(info) {
   return `
 const baseUrl = "${info.baseUrl}";
@@ -23,11 +25,34 @@ function getPayload(method) {
   }
 }
 
+// 去重处理
+const schemasSet = new Set();
+
+function getRequestBodyType(key, schemas) {
+  let schemasstr = "";
+  if (!schemasSet.has(key)) {
+    schemasSet.add(key);
+    const { str, extraArr } = getType({ ...schemas[key], namespace: key }, true);
+    schemasstr += `${str}`;
+
+    // 补齐未声明的类型
+    if (extraArr.length) {
+      extraArr.forEach((extra) => {
+        schemasstr += getRequestBodyType(extra, schemas);
+      })
+    }
+  }
+
+  return schemasstr;
+}
+
 function parseParams(params, schemas) {
   let url = params.path;
   let payload;
   let _params;
   const method = params.method;
+
+  let schemasstr = "";
 
   const arr = ["get", "delete", "head", "options"];
   if (arr.includes(method)) {
@@ -39,7 +64,16 @@ function parseParams(params, schemas) {
     payload = "params";
 
     if (params.requestBody) {
-      _params = params.requestBody.content;
+      const content = params.requestBody.content;
+      _params = content;
+
+      const schema = content["application/json"].schema;
+
+      if (schema.$ref) {
+        const key = schema.$ref.split("/").at(-1);
+        schemasstr += getRequestBodyType(key, schemas);
+      }
+
     }
 
     // 针对post请求存在需要拼接query的情况
@@ -66,10 +100,25 @@ function parseParams(params, schemas) {
   return {
     url,
     payload,
-    _params
+    _params,
+    schemasstr
   }
 }
 
+function getApiTemplate(params) {
+  return `
+/**
+ * ${params.summary || "请补充描述..."}
+ * @param {*} params
+ * @returns
+ */
+export const ${params.operationId} = async (params) => {
+  const response = await axiosInstance.${params.method}(${params.url}, ${params.payload});
+
+  return response;
+};
+`
+}
 
 function getApi(params, options, schemas) {
   // const payload = getPayload(params.method);
@@ -80,22 +129,27 @@ function getApi(params, options, schemas) {
   //   // console.log(params.requestBody)
   // }
 
-  let { url, payload } = parseParams(params, schemas);
+  let { url, payload, schemasstr } = parseParams(params, schemas);
   url = options.prefix ? `\`\${baseUrl}${url}\`` : `"${url}"`;
 
 
-  return `
-/**
- * ${params.summary || "请补充描述..."}
- * @param {*} params
- * @returns
- */
-export const ${params.operationId} = async (params) => {
-  const response = await axiosInstance.${params.method}(${url}, ${payload});
+//   return `
+// /**
+//  * ${params.summary || "请补充描述..."}
+//  * @param {*} params
+//  * @returns
+//  */
+// export const ${params.operationId} = async (params) => {
+//   const response = await axiosInstance.${params.method}(${url}, ${payload});
 
-  return response;
-};
-`
+//   return response;
+// };
+// `
+
+return {
+  template: getApiTemplate({ ...params, url, payload }),
+  type: schemasstr
+}
 };
 
 async function getRequestFile(json, options) {
@@ -107,13 +161,19 @@ async function getRequestFile(json, options) {
 
   const schemas = json.components.schemas;
 
+
+  let typeStr = "";
+
   paths.forEach((path) => {
     const info = json.paths[path];
     const method = Object.keys(info)[0];
 
-    const template = getApi({ path, method, ...info[method] }, options, schemas);
+    const { template, type } = getApi({ path, method, ...info[method] }, options, schemas);
 
     str += `${template} \n`;
+    if (type) {
+      typeStr += `${type}`
+    }
   });
 
   let outPath = path.resolve(__dirname, "api.js");
@@ -123,8 +183,9 @@ async function getRequestFile(json, options) {
   }
 
   await fs.writeFile(outPath, str);
+  await fs.writeFile(path.resolve(__dirname, "type.d.ts"), typeStr);
 
-  return str;
+  return paths;
 };
 
 module.exports = {
