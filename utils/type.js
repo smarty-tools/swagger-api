@@ -93,6 +93,28 @@ const getTypes = (schemas) => {
   return schemasstr;
 }
 
+function formatArrayType(data, flag, set) {
+  let type = "";
+  if (data.type) {
+    // tstype = `${items.type}[]`;
+    type = `${typeMap[data.type] ?? data.type}[]`
+  } else if (items.$ref) {
+    const ref = getRef(data.$ref);
+    type = `${ref}[]`;
+
+    if (flag) {
+      set.add(ref);
+    }
+  }
+
+  return type;
+}
+
+function getRef(source) {
+  const ref = source.split("/").at(-1);
+  return ref;
+}
+
 const getType = (info, extraFlag = false) => {
   const { type, properties, namespace } = info;
   let str;
@@ -108,24 +130,14 @@ const getType = (info, extraFlag = false) => {
 
       if (!type) {
         if ($ref) {
-          const ref = $ref.split("/").at(-1);
+          const ref = getRef($ref);
           tstype = ref;
         } else {
           tstype = "unknow";
         }
       } else {
         if (type === "array") {
-          if (items.type) {
-            // tstype = `${items.type}[]`;
-            tstype = `${typeMap[items.type] ?? items.type}[]`
-          } else if (items.$ref) {
-            const ref = items.$ref.split("/").at(-1);
-            tstype = `${ref}[]`;
-
-            if (extraFlag) {
-              extraSet.add(ref);
-            }
-          }
+          tstype = formatArrayType(items, extraFlag, extraSet);
         } else {
           tstype = typeMap[type] ?? type;
         }

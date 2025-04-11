@@ -69,6 +69,16 @@ function parseParams(params, schemas) {
 
       const schema = content["application/json"].schema;
 
+      // todo 不是interface声明的类型
+      // if (schema.type) {
+      //   if (type === "array") {
+      //     tstype = formatArrayType(items, extraFlag, extraSet);
+      //   } else {
+      //     todo 文件类型
+      //     tstype = typeMap[type] ?? type;
+      //   }
+      // }
+
       if (schema.$ref) {
         const key = schema.$ref.split("/").at(-1);
         schemasstr += getRequestBodyType(key, schemas);
