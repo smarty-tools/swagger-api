@@ -61,6 +61,24 @@ function parseParams(params, schemas) {
     payload = "{ params }";
 
     _params = params.parameters;
+    const queryRef = {};
+    params.parameters?.forEach(item => {
+      const key = item.name;
+      const schema = item.schema;
+      if (schema.type) {
+        queryRef[key] = typeMap[schema.type];
+      } else if (schema.$ref) {
+        const ref = schema.$ref.split("/").at(-1);
+        schemasstr += getRefType(ref, schemas);
+        argumentsArr.push(ref);
+      }
+    })
+
+    const queryRefKeys = Object.keys(queryRef);
+    if (queryRefKeys.length) {
+      argumentsArr.push(JSON.stringify(queryRef, null, 2));
+    }
+
   } else {
     // post、put、patch、postForm、putForm、patchForm
     payload = "params";
@@ -119,22 +137,24 @@ function parseParams(params, schemas) {
       let querystr = querystring.stringify(query, "&", "=", { encodeURIComponent: (data) => data });
       url += `?${querystr}`
     }
-
-    argumentsArr.forEach((arg, index) => {
-      if (index !== 0) {
-        arguments += ` & ${arg}`
-      } else {
-        arguments += `${arg}`;
-      }
-    })
   }
+  argumentsArr.forEach((arg, index) => {
+    if (index !== 0) {
+      arguments += ` & ${arg}`
+    } else {
+      arguments += `${arg}`;
+    }
+  })
+
+
+  const hasPayload = !!arguments.length;
 
   return {
     url,
-    payload,
+    payload: hasPayload ? payload : "",
     _params,
     schemasstr,
-    arguments: arguments.length ? `params: ${arguments.replaceAll("\"", "")}` : `params`
+    arguments: hasPayload ? `params: ${arguments.replaceAll("\"", "")}` : ""
   }
 }
 
@@ -146,7 +166,7 @@ function getApiTemplate(params) {
  * @returns
  */
 export const ${params.operationId} = async (${params.arguments}) => {
-  const response = await axiosInstance.${params.method}(${params.url}, ${params.payload});
+  const response = await axiosInstance.${params.method}(${params.url}${!!params.payload? `, ${params.payload}` : ""});
 
   return response;
 };
