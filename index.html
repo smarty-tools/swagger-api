@@ -1,15 +1,212 @@
 <html>
-  <head></head>
-  <body>
-    <form method="post" action="/upload" enctype="multipart/form-data">
-      <input type="file" accept=".json" name="file" />
-      <div>
-        <input type="checkbox" id="prefix" name="prefix" checked />
-        <label for="prefix">是否拼接baseUrl</label>
-      </div>
-      <div>
-        <button type="submit">上传</button>
-      </div>
-    </form>
-  </body>
+
+<head>
+  <!-- 引入样式 -->
+  <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+  <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+  <!-- 引入组件库 -->
+  <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+  <style>
+    .el-upload-list__item-name [class^=el-icon] {
+      height: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <el-steps :active="step" finish-status="success">
+      <el-step title="步骤 1"></el-step>
+      <el-step title="步骤 2"></el-step>
+      <el-step title="步骤 3"></el-step>
+    </el-steps>
+    <div v-if="step === 1">
+      <el-upload class="upload-demo" ref="upload" limit="1" accept=".json" :on-change="onFileChange"
+        :on-remove="onFileChange" :auto-upload="false">
+        <el-button slot="trigger" size="small" type="primary">选取文件</el-button>
+      </el-upload>
+
+      <el-button style="margin-top: 50px;" size="small" type="success" @click="submitUpload" :disabled="!file">解析文件</el-button>
+    </div>
+    <div v-else>
+      <el-form ref="form" label-width="20px">
+        <el-form-item>
+          <el-checkbox v-model="form.prefix">是否拼接baseUrl</el-checkbox>
+        </el-form-item>
+        <el-form-item>
+          <el-radio-group v-model="form.suffix">
+            <el-radio label="js">js</el-radio>
+            <el-radio label="ts">ts</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item>
+          <el-tree :data="tree" show-checkbox node-key="id" ref="tree" :default-expanded-keys="expandList"
+            :default-checked-keys="checkedList" label="label" children="children">
+          </el-tree>
+        </el-form-item>
+      </el-form>
+
+      <el-button type="success" size="small" @click="onSubmit">提交</el-button>
+    </div>
+  </div>
+  <script>
+    function request({ method, url, data, headers }) {
+      return new Promise((resolve, reject) => {
+        var xhr = new XMLHttpRequest();
+        xhr.open(method, url);
+
+        if (!(data instanceof FormData)) {
+          xhr.setRequestHeader('Content-Type', 'application/json');
+        }
+        xhr.send(data);
+
+        xhr.onreadystatechange = function () {
+          console.log(xhr, "xhr")
+          if (xhr.readyState === 4) {
+
+            if (xhr.status === 200) {
+              resolve(xhr.response);
+            } else {
+              reject();
+            }
+          }
+        }
+
+        xhr.onerror = function (e) {
+          reject(e)
+        }
+
+      })
+    }
+  </script>
+  <script>
+    const app = new Vue({
+      el: '#app',
+      data() {
+        return {
+          file: null,
+          tree: [],
+          checkedList: [],
+          expandList: [0],
+          step: 1,
+          form: {
+            prefix: true,
+            suffix: "js",
+          }
+        }
+      },
+      // computed: {
+      //   isCheck() {
+      //     return this.$refs?.tree?.getCheckedKeys?.(true)?.length;
+      //   }
+      // },
+      methods: {
+        handlePreview(file) {
+          console.log(file);
+        },
+        handleExceed(files, fileList) {
+          // this.$message.warning(`当前限制选择 3 个文件，本次选择了 ${files.length} 个文件，共选择了 ${files.length + fileList.length} 个文件`);
+        },
+        beforeRemove(file, fileList) {
+          // return this.$confirm(`确定移除 ${file.name}？`);
+        },
+        submitUpload(fileList) {
+          if (!this.file) {
+            return this.$message.error('请先上传文件');;
+          }
+
+          const loading = this.$loading({
+            lock: true,
+            text: 'Loading',
+            spinner: 'el-icon-loading',
+            background: 'rgba(0, 0, 0, 0.7)'
+          });
+
+          const that = this;
+          console.log(this.file)
+          const formData = new FormData();
+          formData.append("file", this.file.raw)
+
+          request({
+            method: "POST",
+            url: "/upload",
+            data: formData,
+            headers: {
+              "content-type": "multipart/form-data"
+            }
+          }).then(res => {
+            console.log(res, "res")
+
+            const paths = JSON.parse(res);
+
+            that.step = 2;
+            const tagObj = {};
+            Object.entries(paths).forEach(([path, value], index) => {
+              const { tags, summary } = Object.values(value)[0];
+              const tag = tags[0];
+
+              (tagObj[tag] || (tagObj[tag] = [])).push({
+                path,
+                summary
+              });
+            })
+
+            const checked = [];
+            const treeData = Object.entries(tagObj).map(([key, value], index) => {
+              return (
+                {
+                  id: index + 1,
+                  label: key,
+                  children: value.map((item) => {
+                    const id = item.path;
+                    checked.push(id);
+                    return (
+                      {
+                        id,
+                        label: `${item.path} ${item.summary}`
+                      }
+                    )
+                  })
+                }
+              )
+            });
+
+            that.tree = [{
+              id: 0,
+              label: "全选",
+              children: treeData
+            }];
+
+            that.checkedList = checked;
+          }).catch(e => {
+            console.log(e, "e");
+          }).finally(() => {
+            loading.close();
+          })
+        },
+        onFileChange(file, fileList) {
+          this.file = fileList[0] ?? null;
+        },
+        onSubmit() {
+          const paths = this.$refs.tree.getCheckedKeys(true);
+          const payload = {
+            ...this.form,
+            paths,
+            // prefix: this.prefix,
+            // suffix: this.suffix
+          }
+
+          console.log(payload, "payload")
+          request({
+            method: "POST",
+            url: "/parse",
+            data: JSON.stringify(payload)
+          }).then(res => {
+            console.log(res, "res");
+          })
+        }
+      }
+    })
+  </script>
+</body>
 </html>

@@ -17,14 +17,35 @@ page.get("/", async (ctx) => {
   ctx.body = html;
 });
 
+let json;
+
 page.post("/upload", upload.single('file'), async (ctx) => {
+  try {
+    const body = ctx.request.body;
+    json = JSON.parse(ctx.file.buffer.toString());
+    ctx.body = JSON.stringify(json.paths);
+  } catch (e) {
+    console.error(e);
+  }
+});
+
+page.post("/parse", async (ctx) => {
   try {
     const body = ctx.request.body;
     const options = {};
     options.prefix = !!body.prefix;
+    options.suffix = body.suffix;
 
-    const json = JSON.parse(ctx.file.buffer.toString());
-    const str = await getRequestFile(json, options);
+    const paths = {};
+
+    body.paths.forEach(key => {
+      paths[key] = json.paths[key];
+    })
+
+    const str = await getRequestFile({
+      ...json,
+      paths,
+    }, options);
 
     ctx.body = str;
   } catch (e) {
