@@ -52,21 +52,29 @@ function getRefType(key, schemas) {
  * @returns 
  */
 function parseUrl(path) {
+  const query = {};
   const arr = path.split("/");
   const newUrlArr = arr.map(item => {
     if (item.startsWith("{") && item.endsWith("}")) {
-      return `\${params.${item.slice(1, item.length - 1)}}`
+      const key = item.slice(1, item.length - 1);
+      query[key] = "number | string";
+      return `\${params.${key}}`
     }
 
     return item;
   });
 
-  console.log(newUrlArr, "newUrlArr")
-  return newUrlArr.join("/");
+  return {
+    url: newUrlArr.join("/"),
+    query
+  }
 }
 
 function parseParams(params, schemas) {
-  let url = parseUrl(params.path);
+  // 用于处理非.d.ts声明的参数
+  // let queryRef = {};
+
+  let { url, query: queryRef } = parseUrl(params.path);
   let payload;
   let _params;
   let arguments = "";
@@ -83,7 +91,6 @@ function parseParams(params, schemas) {
     payload = "{ params }";
 
     _params = params.parameters;
-    const queryRef = {};
     params.parameters?.forEach(item => {
       const key = item.name;
       const schema = item.schema;
@@ -96,12 +103,6 @@ function parseParams(params, schemas) {
         argumentsArr.push(ref);
       }
     })
-
-    const queryRefKeys = Object.keys(queryRef);
-    if (queryRefKeys.length) {
-      argumentsArr.push(JSON.stringify(queryRef, null, 2));
-    }
-
   } else {
     // post、put、patch、postForm、putForm、patchForm
     payload = "params";
@@ -135,7 +136,6 @@ function parseParams(params, schemas) {
     // 针对post请求存在需要拼接query的情况
     if (params.parameters?.length) {
       const query = {};
-      const queryRef = {};
       params.parameters.forEach(item => {
         const key = item.name;
         const schema = item.schema;
@@ -153,14 +153,16 @@ function parseParams(params, schemas) {
         }
       })
 
-      const queryRefKeys = Object.keys(queryRef);
-      if (queryRefKeys.length) {
-        argumentsArr.push(JSON.stringify(queryRef, null, 2));
-      }
       let querystr = querystring.stringify(query, "&", "=", { encodeURIComponent: (data) => data });
       url += `?${querystr}`
     }
   }
+
+  const queryRefKeys = Object.keys(queryRef);
+  if (queryRefKeys.length) {
+    argumentsArr.push(JSON.stringify(queryRef, null, 2));
+  }
+
   argumentsArr.forEach((arg, index) => {
     if (index !== 0) {
       arguments += ` & ${arg}`
@@ -182,14 +184,15 @@ function parseParams(params, schemas) {
 }
 
 function getApiTemplate(params) {
+  const hasPayload = !!params.payload;
   return `
 /**
  * ${params.summary || "请补充描述..."}
- * @param {*} params
+ * @param {*} ${hasPayload ? "params" : ""}
  * @returns
  */
 export const ${params.operationId} = async (${params.arguments}) => {
-  const response = await axiosInstance.${params.method}(${params.url}${!!params.payload ? `, ${params.payload}` : ""});
+  const response = await axiosInstance.${params.method}(${params.url}${hasPayload ? `, ${params.payload}` : ""});
 
   return response;
 };
