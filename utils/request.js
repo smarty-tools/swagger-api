@@ -46,8 +46,27 @@ function getRefType(key, schemas) {
   return schemasstr;
 }
 
+/**
+ * 处理url
+ * @param {*} path 
+ * @returns 
+ */
+function parseUrl(path) {
+  const arr = path.split("/");
+  const newUrlArr = arr.map(item => {
+    if (item.startsWith("{") && item.endsWith("}")) {
+      return `\${params.${item.slice(1, item.length - 1)}}`
+    }
+
+    return item;
+  });
+
+  console.log(newUrlArr, "newUrlArr")
+  return newUrlArr.join("/");
+}
+
 function parseParams(params, schemas) {
-  let url = params.path;
+  let url = parseUrl(params.path);
   let payload;
   let _params;
   let arguments = "";
@@ -56,6 +75,9 @@ function parseParams(params, schemas) {
 
   let schemasstr = "";
 
+
+
+  // 处理参数
   const arr = ["get", "delete", "head", "options"];
   if (arr.includes(method)) {
     payload = "{ params }";
@@ -65,6 +87,7 @@ function parseParams(params, schemas) {
     params.parameters?.forEach(item => {
       const key = item.name;
       const schema = item.schema;
+      // 处理未声明.d.ts的参数
       if (schema.type) {
         queryRef[key] = typeMap[schema.type];
       } else if (schema.$ref) {
@@ -166,7 +189,7 @@ function getApiTemplate(params) {
  * @returns
  */
 export const ${params.operationId} = async (${params.arguments}) => {
-  const response = await axiosInstance.${params.method}(${params.url}${!!params.payload? `, ${params.payload}` : ""});
+  const response = await axiosInstance.${params.method}(${params.url}${!!params.payload ? `, ${params.payload}` : ""});
 
   return response;
 };
