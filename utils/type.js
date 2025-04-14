@@ -98,7 +98,7 @@ function formatArrayType(data, flag, set) {
   if (data.type) {
     // tstype = `${items.type}[]`;
     type = `${typeMap[data.type] ?? data.type}[]`
-  } else if (items.$ref) {
+  } else if (data.$ref) {
     const ref = getRef(data.$ref);
     type = `${ref}[]`;
 
@@ -160,7 +160,8 @@ const getType = (info, extraFlag = false) => {
 
 exports = {
   getTypeFile,
-  getType
+  getType,
+  typeMap
 }
 
 module.exports = exports;

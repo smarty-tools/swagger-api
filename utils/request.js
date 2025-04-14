@@ -6,7 +6,7 @@ const querystring = require("querystring");
 
 const parsed = getArgs(process.argv.slice(2));
 
-const { getType } = require("./type");
+const { getType, typeMap } = require("./type");
 
 function getTemplateHeader(info) {
   return `
@@ -28,7 +28,7 @@ function getPayload(method) {
 // 去重处理
 const schemasSet = new Set();
 
-function getRequestBodyType(key, schemas) {
+function getRefType(key, schemas) {
   let schemasstr = "";
   if (!schemasSet.has(key)) {
     schemasSet.add(key);
@@ -38,7 +38,7 @@ function getRequestBodyType(key, schemas) {
     // 补齐未声明的类型
     if (extraArr.length) {
       extraArr.forEach((extra) => {
-        schemasstr += getRequestBodyType(extra, schemas);
+        schemasstr += getRefType(extra, schemas);
       })
     }
   }
@@ -50,6 +50,8 @@ function parseParams(params, schemas) {
   let url = params.path;
   let payload;
   let _params;
+  let arguments = "";
+  const argumentsArr = [];
   const method = params.method;
 
   let schemasstr = "";
@@ -69,19 +71,22 @@ function parseParams(params, schemas) {
 
       const schema = content["application/json"].schema;
 
-      // todo 不是interface声明的类型
+      // // todo 不是interface声明的类型
       // if (schema.type) {
+      //   const { type, items } = schema;
       //   if (type === "array") {
       //     tstype = formatArrayType(items, extraFlag, extraSet);
       //   } else {
-      //     todo 文件类型
+      //     // todo 文件类型
       //     tstype = typeMap[type] ?? type;
       //   }
       // }
 
+      // 写入.d.ts文件
       if (schema.$ref) {
         const key = schema.$ref.split("/").at(-1);
-        schemasstr += getRequestBodyType(key, schemas);
+        schemasstr += getRefType(key, schemas);
+        argumentsArr.push(key);
       }
 
     }
@@ -89,29 +94,47 @@ function parseParams(params, schemas) {
     // 针对post请求存在需要拼接query的情况
     if (params.parameters?.length) {
       const query = {};
+      const queryRef = {};
       params.parameters.forEach(item => {
         const key = item.name;
         const schema = item.schema;
         if (schema.type) {
           query[key] = `\${params.${key}}`;
+          queryRef[key] = typeMap[schema.type];
         } else if (schema.$ref) {
           const ref = schema.$ref.split("/").at(-1);
+          schemasstr += getRefType(ref, schemas);
+          argumentsArr.push(ref);
           const { properties } = schemas[ref];
           Object.keys(properties).forEach((key) => {
             query[key] = `\${params.${key}}`;
           })
         }
       })
+
+      const queryRefKeys = Object.keys(queryRef);
+      if (queryRefKeys.length) {
+        argumentsArr.push(JSON.stringify(queryRef, null, 2));
+      }
       let querystr = querystring.stringify(query, "&", "=", { encodeURIComponent: (data) => data });
       url += `?${querystr}`
     }
+
+    argumentsArr.forEach((arg, index) => {
+      if (index !== 0) {
+        arguments += ` & ${arg}`
+      } else {
+        arguments += `${arg}`;
+      }
+    })
   }
 
   return {
     url,
     payload,
     _params,
-    schemasstr
+    schemasstr,
+    arguments: arguments.length ? `params: ${arguments.replaceAll("\"", "")}` : `params`
   }
 }
 
@@ -122,7 +145,7 @@ function getApiTemplate(params) {
  * @param {*} params
  * @returns
  */
-export const ${params.operationId} = async (params) => {
+export const ${params.operationId} = async (${params.arguments}) => {
   const response = await axiosInstance.${params.method}(${params.url}, ${params.payload});
 
   return response;
@@ -139,27 +162,27 @@ function getApi(params, options, schemas) {
   //   // console.log(params.requestBody)
   // }
 
-  let { url, payload, schemasstr } = parseParams(params, schemas);
+  let { url, payload, schemasstr, arguments } = parseParams(params, schemas);
   url = options.prefix ? `\`\${baseUrl}${url}\`` : `"${url}"`;
 
 
-//   return `
-// /**
-//  * ${params.summary || "请补充描述..."}
-//  * @param {*} params
-//  * @returns
-//  */
-// export const ${params.operationId} = async (params) => {
-//   const response = await axiosInstance.${params.method}(${url}, ${payload});
+  //   return `
+  // /**
+  //  * ${params.summary || "请补充描述..."}
+  //  * @param {*} params
+  //  * @returns
+  //  */
+  // export const ${params.operationId} = async (params) => {
+  //   const response = await axiosInstance.${params.method}(${url}, ${payload});
 
-//   return response;
-// };
-// `
+  //   return response;
+  // };
+  // `
 
-return {
-  template: getApiTemplate({ ...params, url, payload }),
-  type: schemasstr
-}
+  return {
+    template: getApiTemplate({ ...params, url, payload, arguments }),
+    type: schemasstr
+  }
 };
 
 async function getRequestFile(json, options) {
@@ -186,10 +209,11 @@ async function getRequestFile(json, options) {
     }
   });
 
-  let outPath = path.resolve(__dirname, "api.js");
+  const fileName = `api.${options.suffix}`;
+  let outPath = path.resolve(__dirname, fileName);
   const _path = parsed.o;
   if (_path && typeof _path !== "boolean") {
-    outPath = path.resolve(_path, "api.js");
+    outPath = path.resolve(_path, fileName);
   }
 
   await fs.writeFile(outPath, str);
