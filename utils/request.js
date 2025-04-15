@@ -72,8 +72,6 @@ function parseUrl(path) {
 
 function parseParams(params, schemas) {
   // 用于处理非.d.ts声明的参数
-  // let queryRef = {};
-
   let { url, query: queryRef } = parseUrl(params.path);
   let payload;
   let _params;
@@ -82,8 +80,6 @@ function parseParams(params, schemas) {
   const method = params.method;
 
   let schemasstr = "";
-
-
 
   // 处理参数
   const arr = ["get", "delete", "head", "options"];
@@ -173,6 +169,19 @@ function parseParams(params, schemas) {
 
 
   const hasPayload = !!arguments.length;
+
+  // 处理responses
+  const responses = params.responses;
+  const content = responses[200].content;
+  const contentInfo = Object.values(content);
+
+  contentInfo.forEach(info => {
+    const { schema } = info;
+    if (schema.$ref) {
+      const key = schema.$ref.split("/").at(-1);
+      schemasstr += getRefType(key, schemas);
+    }
+  })
 
   return {
     url,
