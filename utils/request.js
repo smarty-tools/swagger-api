@@ -175,10 +175,12 @@ function parseParams(params, schemas) {
   const content = responses[200].content;
   const contentInfo = Object.values(content);
 
+  const responseArr = [];
   contentInfo.forEach(info => {
     const { schema } = info;
     if (schema.$ref) {
       const key = schema.$ref.split("/").at(-1);
+      responseArr.push(key);
       schemasstr += getRefType(key, schemas);
     }
   })
@@ -188,7 +190,8 @@ function parseParams(params, schemas) {
     payload: hasPayload ? payload : "",
     _params,
     schemasstr,
-    arguments: hasPayload ? `params: ${arguments.replaceAll("\"", "")}` : ""
+    arguments: hasPayload ? `params: ${arguments.replaceAll("\"", "")}` : "",
+    response: responseArr.join("&")
   }
 }
 
@@ -200,7 +203,7 @@ function getApiTemplate(params) {
  * @param {*} ${hasPayload ? "params" : ""}
  * @returns
  */
-export const ${params.operationId} = async (${params.arguments}) => {
+export const ${params.operationId} = async (${params.arguments}): Promise<${params.response}> => {
   const response = await axiosInstance.${params.method}(${params.url}${hasPayload ? `, ${params.payload}` : ""});
 
   return response;
@@ -217,7 +220,7 @@ function getApi(params, options, schemas) {
   //   // console.log(params.requestBody)
   // }
 
-  let { url, payload, schemasstr, arguments } = parseParams(params, schemas);
+  let { url, payload, schemasstr, arguments, response } = parseParams(params, schemas);
   url = options.prefix ? `\`\${baseUrl}${url}\`` : `"${url}"`;
 
 
@@ -235,7 +238,7 @@ function getApi(params, options, schemas) {
   // `
 
   return {
-    template: getApiTemplate({ ...params, url, payload, arguments }),
+    template: getApiTemplate({ ...params, url, payload, arguments, response }),
     type: schemasstr
   }
 };
