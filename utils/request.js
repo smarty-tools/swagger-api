@@ -70,16 +70,21 @@ function parseUrl(path) {
   }
 }
 
-function parseParams(params, schemas) {
+function parseParams(params, schemas, options) {
   // 用于处理非.d.ts声明的参数
-  let { url, query: queryRef } = parseUrl(params.path);
+  const { url, query: queryRef } = parseUrl(params.path);
+  const result = {
+    url
+  };
   let payload;
   let _params;
-  let arguments = "";
+  // 用于存储形参
   const argumentsArr = [];
   const method = params.method;
 
   let schemasstr = "";
+
+  const isTS = options.suffix === "ts";
 
   // 处理参数
   const arr = ["get", "delete", "head", "options"];
@@ -87,18 +92,26 @@ function parseParams(params, schemas) {
     payload = "{ params }";
 
     _params = params.parameters;
-    params.parameters?.forEach(item => {
-      const key = item.name;
-      const schema = item.schema;
-      // 处理未声明.d.ts的参数
-      if (schema.type) {
-        queryRef[key] = typeMap[schema.type];
-      } else if (schema.$ref) {
-        const ref = schema.$ref.split("/").at(-1);
-        schemasstr += getRefType(ref, schemas);
-        argumentsArr.push(ref);
+    const parameters = params.parameters || [];
+    if (isTS) {
+      parameters.forEach(item => {
+        const key = item.name;
+        const schema = item.schema;
+        // 处理未声明.d.ts的参数
+        if (schema.type) {
+          queryRef[key] = typeMap[schema.type];
+        } else if (schema.$ref) {
+          const ref = schema.$ref.split("/").at(-1);
+          schemasstr += getRefType(ref, schemas);
+          argumentsArr.push(ref);
+        }
+      })
+    } else {
+      if (parameters.length) {
+        argumentsArr.push("parameters");
       }
-    })
+    }
+
   } else {
     // post、put、patch、postForm、putForm、patchForm
     payload = "params";
@@ -122,11 +135,14 @@ function parseParams(params, schemas) {
 
       // 写入.d.ts文件
       if (schema.$ref) {
-        const key = schema.$ref.split("/").at(-1);
-        schemasstr += getRefType(key, schemas);
-        argumentsArr.push(key);
+        if (isTS) {
+          const key = schema.$ref.split("/").at(-1);
+          schemasstr += getRefType(key, schemas);
+          argumentsArr.push(key);
+        } else {
+          argumentsArr.push("requestBody");
+        }
       }
-
     }
 
     // 针对post请求存在需要拼接query的情况
@@ -137,73 +153,95 @@ function parseParams(params, schemas) {
         const schema = item.schema;
         if (schema.type) {
           query[key] = `\${params.${key}}`;
-          queryRef[key] = typeMap[schema.type];
+          if (isTS) {
+            queryRef[key] = typeMap[schema.type];
+          } else {
+            argumentsArr.push("parameters");
+          }
         } else if (schema.$ref) {
           const ref = schema.$ref.split("/").at(-1);
-          schemasstr += getRefType(ref, schemas);
-          argumentsArr.push(ref);
           const { properties } = schemas[ref];
           Object.keys(properties).forEach((key) => {
             query[key] = `\${params.${key}}`;
           })
+
+          if (isTS) {
+            schemasstr += getRefType(ref, schemas);
+            argumentsArr.push(ref);
+          } else {
+            argumentsArr.push("parameters");
+          }
         }
       })
 
       let querystr = querystring.stringify(query, "&", "=", { encodeURIComponent: (data) => data });
-      url += `?${querystr}`
+      // url += `?${querystr}`
+      result.url = url + `?${querystr}`;
     }
   }
 
+  // 将url中的参数 或 非.d.ts声明的参数存入argumentsArr
   const queryRefKeys = Object.keys(queryRef);
   if (queryRefKeys.length) {
     argumentsArr.push(JSON.stringify(queryRef, null, 2));
   }
 
-  argumentsArr.forEach((arg, index) => {
-    if (index !== 0) {
-      arguments += ` & ${arg}`
-    } else {
-      arguments += `${arg}`;
-    }
-  })
+  const hasPayload = !!argumentsArr.length;
 
 
-  const hasPayload = !!arguments.length;
+  if (isTS) {
+    // 将参数声明整合为字符串
+    let arguments = "";
+    argumentsArr.forEach((arg, index) => {
+      if (index !== 0) {
+        arguments += ` & ${arg}`
+      } else {
+        arguments += `${arg}`;
+      }
+    })
 
-  // 处理responses
-  const responses = params.responses;
-  const content = responses[200].content;
-  const contentInfo = Object.values(content);
+    result.arguments = hasPayload ? `params: ${arguments.replaceAll("\"", "")}` : "";
 
-  const responseArr = [];
-  contentInfo.forEach(info => {
-    const { schema } = info;
-    if (schema.$ref) {
-      const key = schema.$ref.split("/").at(-1);
-      responseArr.push(key);
-      schemasstr += getRefType(key, schemas);
-    }
-  })
+    // 处理responses
+    const responses = params.responses;
+    const content = responses[200].content;
+    const contentInfo = Object.values(content);
 
-  return {
-    url,
-    payload: hasPayload ? payload : "",
-    _params,
-    schemasstr,
-    arguments: hasPayload ? `params: ${arguments.replaceAll("\"", "")}` : "",
-    response: responseArr.join("&")
+    const responseArr = [];
+    contentInfo.forEach(info => {
+      const { schema } = info;
+      if (schema.$ref) {
+        const key = schema.$ref.split("/").at(-1);
+        responseArr.push(key);
+        schemasstr += getRefType(key, schemas);
+      }
+    })
+
+    result.response = responseArr.join("&");
+
+    result.schemasstr = schemasstr;
+  } else {
+    result.arguments = hasPayload ? "params" : "";
   }
+
+  result.payload = hasPayload ? payload : "";
+
+  return result;
 }
 
-function getApiTemplate(params) {
+function getApiTemplate(params, options) {
   const hasPayload = !!params.payload;
+
+  const isTS = options.suffix === "ts";
+  const response = isTS ? `: Promise<${params.response}>` : "";
+
   return `
 /**
  * ${params.summary || "请补充描述..."}
  * @param {*} ${hasPayload ? "params" : ""}
  * @returns
  */
-export const ${params.operationId} = async (${params.arguments}): Promise<${params.response}> => {
+export const ${params.operationId} = async (${params.arguments})${response}  => {
   const response = await axiosInstance.${params.method}(${params.url}${hasPayload ? `, ${params.payload}` : ""});
 
   return response;
@@ -212,41 +250,19 @@ export const ${params.operationId} = async (${params.arguments}): Promise<${para
 }
 
 function getApi(params, options, schemas) {
-  // const payload = getPayload(params.method);
-  // let url = options.prefix ? `\`\${baseUrl}${params.path}\`` : `"${params.path}"`;
-
-  // if (params.path === "/file/upload/resourcePositionImage") {
-  //   console.log(params)
-  //   // console.log(params.requestBody)
-  // }
-
-  let { url, payload, schemasstr, arguments, response } = parseParams(params, schemas);
+  let { url, payload, schemasstr, arguments, response } = parseParams(params, schemas, options);
   url = options.prefix ? `\`\${baseUrl}${url}\`` : `"${url}"`;
 
-
-  //   return `
-  // /**
-  //  * ${params.summary || "请补充描述..."}
-  //  * @param {*} params
-  //  * @returns
-  //  */
-  // export const ${params.operationId} = async (params) => {
-  //   const response = await axiosInstance.${params.method}(${url}, ${payload});
-
-  //   return response;
-  // };
-  // `
-
   return {
-    template: getApiTemplate({ ...params, url, payload, arguments, response }),
+    template: getApiTemplate({ ...params, url, payload, arguments, response }, options),
     type: schemasstr
   }
 };
 
 async function getRequestFile(json, options) {
-  let str = "";
+  let ApiFileContent = "";
   const baseUrl = json.servers[0].url;
-  str += getTemplateHeader({ baseUrl });
+  ApiFileContent += getTemplateHeader({ baseUrl });
 
   const paths = Object.keys(json.paths);
 
@@ -254,7 +270,8 @@ async function getRequestFile(json, options) {
 
   const suffix = options.suffix;
 
-  let typeStr = "";
+  // .d.ts文件内容
+  let dotDTSFileContent = "";
 
   paths.forEach((path) => {
     const info = json.paths[path];
@@ -262,9 +279,9 @@ async function getRequestFile(json, options) {
 
     const { template, type } = getApi({ path, method, ...info[method] }, options, schemas);
 
-    str += `${template} \n`;
+    ApiFileContent += `${template} \n`;
     if (type) {
-      typeStr += `${type}`
+      dotDTSFileContent += `${type}`
     }
   });
 
@@ -274,9 +291,9 @@ async function getRequestFile(json, options) {
     outPathUrl = _path;
   }
   const fileName = `api.${options.suffix}`;
-  await fs.writeFile(path.resolve(outPathUrl, fileName), str);
+  await fs.writeFile(path.resolve(outPathUrl, fileName), ApiFileContent);
   if (suffix === "ts") {
-    await fs.writeFile(path.resolve(outPathUrl, "type.d.ts"), typeStr);
+    await fs.writeFile(path.resolve(outPathUrl, "type.d.ts"), dotDTSFileContent);
   }
 
   return paths;
