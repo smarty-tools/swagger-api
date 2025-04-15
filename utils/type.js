@@ -132,6 +132,7 @@ const getType = (info, extraFlag = false) => {
         if ($ref) {
           const ref = getRef($ref);
           tstype = ref;
+          extraSet.add(ref);
         } else {
           tstype = "unknow";
         }
