@@ -252,6 +252,7 @@ async function getRequestFile(json, options) {
 
   const schemas = json.components.schemas;
 
+  const suffix = options.suffix;
 
   let typeStr = "";
 
@@ -267,15 +268,16 @@ async function getRequestFile(json, options) {
     }
   });
 
-  const fileName = `api.${options.suffix}`;
-  let outPath = path.resolve(__dirname, fileName);
+  let outPathUrl = __dirname;
   const _path = parsed.o;
   if (_path && typeof _path !== "boolean") {
-    outPath = path.resolve(_path, fileName);
+    outPathUrl = _path;
   }
-
-  await fs.writeFile(outPath, str);
-  await fs.writeFile(path.resolve(__dirname, "type.d.ts"), typeStr);
+  const fileName = `api.${options.suffix}`;
+  await fs.writeFile(path.resolve(outPathUrl, fileName), str);
+  if (suffix === "ts") {
+    await fs.writeFile(path.resolve(outPathUrl, "type.d.ts"), typeStr);
+  }
 
   return paths;
 };
