@@ -7,13 +7,7 @@ const querystring = require("querystring");
 const parsed = getArgs(process.argv.slice(2));
 
 const { getType, typeMap } = require("./type");
-
-function getTemplateHeader(info) {
-  return `import axiosInstance from "axios";
-const baseUrl = "${info.baseUrl}";
-`
-};
-
+const { getTemplateHeader, getApiTemplate } = require("./template");
 
 function getPayload(method) {
   const arr = ["get", "delete", "head", "options"];
@@ -123,15 +117,33 @@ function parseParams(params, schemas, options) {
       const schema = content["application/json"].schema;
 
       // // todo 不是interface声明的类型
-      // if (schema.type) {
-      //   const { type, items } = schema;
-      //   if (type === "array") {
-      //     tstype = formatArrayType(items, extraFlag, extraSet);
-      //   } else {
-      //     // todo 文件类型
-      //     tstype = typeMap[type] ?? type;
-      //   }
-      // }
+      if (schema.type) {
+        const { type, items, properties } = schema;
+        // if (type === "array") {
+        //   tstype = formatArrayType(items, extraFlag, extraSet);
+        // } else {
+        //   // todo 文件类型
+        //   tstype = typeMap[type] ?? type;
+        // }
+
+        if (properties) {
+          if (isTS) {
+            Object.entries(properties).forEach(([key, value]) => {
+              // queryRef[key] = ;
+              const { type, format } = value;
+              if (format === "binary") {
+                queryRef[key] = "File";
+              } else {
+                queryRef[key] = typeMap[type] ?? type;
+              }
+            })
+          } else {
+            argumentsArr.push("requestBody");
+          }
+        }
+
+
+      }
 
       // 写入.d.ts文件
       if (schema.$ref) {
@@ -227,26 +239,6 @@ function parseParams(params, schemas, options) {
   result.payload = hasPayload ? payload : "";
 
   return result;
-}
-
-function getApiTemplate(params, options) {
-  const hasPayload = !!params.payload;
-
-  const isTS = options.suffix === "ts";
-  const response = isTS ? `: Promise<${params.response}>` : "";
-
-  return `
-/**
- * ${params.summary || "请补充描述..."}
- * @param {*} ${hasPayload ? "params" : ""}
- * @returns
- */
-export const ${params.operationId} = async (${params.arguments})${response}  => {
-  const response = await axiosInstance.${params.method}(${params.url}${hasPayload ? `, ${params.payload}` : ""});
-
-  return response;
-};
-`
 }
 
 function getApi(params, options, schemas) {
