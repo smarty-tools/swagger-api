@@ -9,7 +9,7 @@ const parsed = getArgs(process.argv.slice(2));
 const { getType, typeMap } = require("./type");
 
 function getTemplateHeader(info) {
-  return `
+  return `import axiosInstance from "axios";
 const baseUrl = "${info.baseUrl}";
 `
 };
@@ -279,7 +279,7 @@ async function getRequestFile(json, options) {
 
     const { template, type } = getApi({ path, method, ...info[method] }, options, schemas);
 
-    ApiFileContent += `${template} \n`;
+    ApiFileContent += `${template}`;
     if (type) {
       dotDTSFileContent += `${type}`
     }
