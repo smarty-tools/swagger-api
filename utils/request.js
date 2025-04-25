@@ -257,7 +257,10 @@ function getApi(params, options, schemas) {
 
 async function getRequestFile(json, options) {
   let ApiFileContent = "";
-  const baseUrl = json.servers[0].url;
+  let baseUrl = "";
+  if (json.servers.length) {
+    baseUrl = json.servers[0].url;
+  }
   ApiFileContent += getTemplateHeader({ baseUrl });
 
   const paths = Object.keys(json.paths);
