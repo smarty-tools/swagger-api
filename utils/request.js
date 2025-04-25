@@ -114,7 +114,8 @@ function parseParams(params, schemas, options) {
       const content = params.requestBody.content;
       _params = content;
 
-      const schema = content["application/json"].schema;
+      const contentType = Object.keys(content)[0];
+      const schema = content[contentType].schema;
 
       // // todo 不是interface声明的类型
       if (schema.type) {
