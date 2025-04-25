@@ -275,14 +275,15 @@ async function getRequestFile(json, options) {
 
   paths.forEach((path) => {
     const info = json.paths[path];
-    const method = Object.keys(info)[0];
+    const methods = Object.keys(info);
+    methods.forEach(method => {
+      const { template, type } = getApi({ path, method, ...info[method] }, options, schemas);
 
-    const { template, type } = getApi({ path, method, ...info[method] }, options, schemas);
-
-    ApiFileContent += `${template}`;
-    if (type) {
-      dotDTSFileContent += `${type}`
-    }
+      ApiFileContent += `${template}`;
+      if (type) {
+        dotDTSFileContent += `${type}`
+      }
+    });
   });
 
   let outPathUrl = __dirname;
