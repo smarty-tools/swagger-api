@@ -287,7 +287,7 @@ async function getRequestFile(json, options) {
   if (suffix === "ts") {
     await fs.writeFile(path.resolve(outPathUrl, "type.d.ts"), dotDTSFileContent);
   }
-
+  schemasSet.clear();
   return paths;
 };
 
