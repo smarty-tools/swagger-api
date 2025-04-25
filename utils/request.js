@@ -164,7 +164,9 @@ function parseParams(params, schemas, options) {
         const key = item.name;
         const schema = item.schema;
         if (schema.type) {
-          query[key] = `\${params.${key}}`;
+          if (item.in !== "path") {
+            query[key] = `\${params.${key}}`;
+          }
           if (isTS) {
             queryRef[key] = typeMap[schema.type];
           } else {
@@ -188,7 +190,9 @@ function parseParams(params, schemas, options) {
 
       let querystr = querystring.stringify(query, "&", "=", { encodeURIComponent: (data) => data });
       // url += `?${querystr}`
-      result.url = url + `?${querystr}`;
+      if (querystr.length) {
+        result.url = url + `?${querystr}`;
+      }
     }
   }
 
